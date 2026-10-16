@@ -19,7 +19,7 @@
 - English speech never reaches the pill. Portuguese shows as English line (≈15 pt, white) over Portuguese line (≈12 pt, italic, muted grey).
 - Pill: ≈400 pt wide, rounded dark translucent, green live dot, default centered near top of main screen, draggable, non-activating, floats over full-screen apps and all Spaces, fades after 8 s without a new caption. Persist position only (`UserDefaults` key `pillOrigin`).
 - Target latency ≤ 3 s from end of phrase to pill.
-- Signing: self-signed identity named `xlate-local`, created once, reused for every build. Never sign with any other identity in the keychain.
+- Signing: the user's own Developer ID identity, SHA-1 `5537036EB2AB6A874BE56556B6ED1EB56729BA71` ("Developer ID Application: EnMobile, L.L.C. (8266PPACBT)", confirmed by the user as theirs on 2026-10-16). `scripts/bundle.sh` reads it from `XLATE_SIGN_ID`, defaulting to that hash. Sign by hash, not name.
 - `Info.plist` must contain `NSAudioCaptureUsageDescription`; verify in the built bundle with `plutil`.
 - Commits: imperative subject ≤ 50 chars, body says why. No AI attribution trailers (user's global rule).
 - Before adding any dependency or using any API from this plan, confirm the current version/signature against official docs or the package registry and note the date in the commit body.
@@ -41,7 +41,6 @@ Package.swift
 .gitignore                         .build/, build/, *.wav, fixtures/out/
 Resources/Info.plist               LSUIElement, NSAudioCaptureUsageDescription, bundle id dev.ckovacs.xlate
 scripts/test.sh                    swift test with CLT Testing framework flags
-scripts/make-cert.sh               one-time xlate-local self-signed identity
 scripts/bundle.sh                  build release, assemble build/Xlate.app, sign
 scripts/make-fixtures.sh           `say` + afconvert → fixtures/out/*.wav + *.txt
 Sources/XlateCore/
@@ -71,7 +70,7 @@ docs/engine-decision.md            Task 5 measurements and choice
 ### Task 1: Scaffold, test runner, signed app bundle
 
 **Files:**
-- Create: `Package.swift`, `.gitignore`, `Resources/Info.plist`, `scripts/test.sh`, `scripts/make-cert.sh`, `scripts/bundle.sh`, `Sources/XlateCore/TargetApp.swift`, `Sources/Xlate/main.swift`, `Tests/XlateCoreTests/TargetAppTests.swift`
+- Create: `Package.swift`, `.gitignore`, `Resources/Info.plist`, `scripts/test.sh`, `scripts/bundle.sh`, `Sources/XlateCore/TargetApp.swift`, `Sources/Xlate/main.swift`, `Tests/XlateCoreTests/TargetAppTests.swift`
 
 **Interfaces:**
 - Produces: `public enum TargetApp { public static let teamsBundleID = "com.microsoft.teams2" }`; `build/Xlate.app` launched as `build/Xlate.app/Contents/MacOS/Xlate [--dev <cmd> ...]`.
@@ -89,11 +88,11 @@ docs/engine-decision.md            Task 5 measurements and choice
   `swift test --build-system native -Xswiftc -F$F -Xlinker -F$F -Xlinker -rpath -Xlinker $F "$@"` with `F=/Library/Developer/CommandLineTools/Library/Developer/Frameworks`. (Plain `swift test` fails on this machine with "no such module 'Testing'"; the default build system fails with "Unknown error parsing property list". Verified 2026-10-16.)
   Run `scripts/test.sh`. Expected: FAIL, `TargetApp` not found.
 - [ ] **Step 4:** Add `TargetApp.swift`. Run `scripts/test.sh`. Expected: PASS.
-- [ ] **Step 5:** `scripts/make-cert.sh`: generate a self-signed code signing cert `xlate-local` with `openssl` (extendedKeyUsage codeSigning), import the p12 into the login keychain, and set it trusted for code signing. Idempotent: exit 0 if `security find-identity -p codesigning | grep xlate-local` already matches. **The user must run this at the Mac** (keychain prompts). Ask them to run `! scripts/make-cert.sh`.
-- [ ] **Step 6:** `Info.plist`: `CFBundleIdentifier dev.ckovacs.xlate`, `CFBundleExecutable Xlate`, `LSUIElement true`, `LSMinimumSystemVersion 26.0`, `NSAudioCaptureUsageDescription "Xlate listens to Microsoft Teams call audio to show live English captions. Audio never leaves this Mac."`. `scripts/bundle.sh`: `swift build -c release --build-system native`, copy binary + plist into `build/Xlate.app`, `codesign --force --options runtime --sign xlate-local build/Xlate.app`.
+- [ ] **Step 5:** Confirm the signing identity is usable: `security find-identity -v -p codesigning | grep 5537036EB2AB6A874BE56556B6ED1EB56729BA71`. The first `codesign` may raise a keychain "allow access to private key" prompt; if it hangs, ask the user to click "Always Allow" at the Mac.
+- [ ] **Step 6:** `Info.plist`: `CFBundleIdentifier dev.ckovacs.xlate`, `CFBundleExecutable Xlate`, `LSUIElement true`, `LSMinimumSystemVersion 26.0`, `NSAudioCaptureUsageDescription "Xlate listens to Microsoft Teams call audio to show live English captions. Audio never leaves this Mac."`. `scripts/bundle.sh`: `swift build -c release --build-system native`, copy binary + plist into `build/Xlate.app`, `codesign --force --options runtime --timestamp=none --sign "$XLATE_SIGN_ID" build/Xlate.app`.
 - [ ] **Step 7:** `main.swift`: if `CommandLine.arguments` contains `--dev`, hand off to `DevCommands` (stub prints usage), else start `NSApplication` with `.accessory` policy and a status item whose only menu item is Quit.
 - [ ] **Step 8: Verify**
-  `scripts/bundle.sh && plutil -p build/Xlate.app/Contents/Info.plist | grep NSAudioCapture && codesign -dv build/Xlate.app 2>&1 | grep 'Authority=xlate-local'`
+  `scripts/bundle.sh && plutil -p build/Xlate.app/Contents/Info.plist | grep NSAudioCapture && codesign -dv build/Xlate.app 2>&1 | grep 'Authority=Developer ID Application: EnMobile'`
   Expected: both greps match.
 - [ ] **Step 9: Commit** `Scaffold package, test runner and signed bundle`
 

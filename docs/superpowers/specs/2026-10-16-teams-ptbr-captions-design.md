@@ -172,8 +172,8 @@ the notes above were checked on 2026-10-16 but should not be trusted blindly.
   runtime, if a model is missing the app shows "model missing" in the menu
   and does nothing (fails closed). Verify with `nettop` during a test call.
 - **Build tooling:** SwiftPM plus a script that assembles and signs the
-  `.app` bundle, so it builds over the command line without Xcode. Create a
-  local self-signed code signing certificate once and reuse it so TCC
+  `.app` bundle, so it builds over the command line without Xcode. Sign
+  with the user's own Developer ID identity (confirmed by the user) so TCC
   permissions survive rebuilds.
 
 ## Left to the builder
