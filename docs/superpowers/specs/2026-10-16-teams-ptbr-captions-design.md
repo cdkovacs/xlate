@@ -1,7 +1,7 @@
 # Teams PT-BR → English live captions (xlate)
 
 Date: 2026-10-16
-Status: draft for review
+Status: awaiting user approval
 
 ## Intent
 
@@ -20,8 +20,8 @@ to install it).
 - Capture only the audio Teams plays out (the remote participants). Not the
   user's mic, not other apps.
 - Transcribe Portuguese speech and translate it to English, on-device.
-- Handle code-switching: when a speaker uses English, show it as-is with no
-  translation line.
+- Handle code-switching: English speech is detected and not shown. The pill
+  appears only for Portuguese. An all-English call never shows the pill.
 - Show captions in a floating "pill" overlay (see Overlay below).
 - Start automatically. The app lives in the menu bar, launches at login,
   wakes when Teams is producing audio, and stays hidden otherwise.
@@ -59,7 +59,7 @@ The user picked the "floating pill" from three mockups. Mockup image:
 - Rounded dark translucent panel, about 400 pt wide, centered near the top of
   the screen by default.
 - Line 1: English, about 15 pt, white. Line 2: original Portuguese, about
-  12 pt, italic, muted grey. For English speech, line 2 is omitted.
+  12 pt, italic, muted grey. English speech never reaches the pill.
 - Small green dot indicates it's live.
 - Shows the current sentence only. A new finished sentence replaces the old
   one. Wraps to more lines if the sentence is long rather than truncating.
@@ -85,8 +85,8 @@ The user picked the "floating pill" from three mockups. Mockup image:
 4. Voice activity detection gates everything downstream so chimes and
    silence don't produce captions.
 5. Speech → text, with per-phrase language identification (pt-BR vs en).
-6. Portuguese phrases → on-device English translation. English phrases pass
-   through.
+6. Portuguese phrases → on-device English translation. English phrases are
+   dropped (decided by the user: the pill stays hidden for English).
 7. Push the result to the pill.
 8. When Teams stops producing audio for a while, tear down the tap and go
    idle.
@@ -138,8 +138,9 @@ the notes above were checked on 2026-10-16 but should not be trusted blindly.
 
 - With Teams in a call where someone speaks Portuguese, the pill appears on
   its own and shows English plus Portuguese within about 3 s of each phrase.
-- When someone switches to English, the pill shows their English with no
-  second line, and doesn't show a nonsense "translation".
+- When someone switches to English, the pill doesn't show anything for it
+  (no nonsense "translation" of English either). The current Portuguese
+  caption fades out on the normal timeout.
 - Teams ringtones and chimes don't trigger the pill.
 - Nothing about the call exists on disk after the call.
 - No network traffic at runtime (spot-check with Little Snitch or `nettop`).
@@ -147,7 +148,9 @@ the notes above were checked on 2026-10-16 but should not be trusted blindly.
 ## Calls made after review (Claude's calls, not the user's)
 
 - **Capture spike goes first**, ahead of the engine spike. Tap Teams during
-  a Teams test call, log which PIDs actually emit call audio, and confirm
+  Teams' built-in "Test call" (decided by the user; it plays an English bot
+  prompt and a playback of the user's own recording, which is enough to
+  prove capture), log which PIDs actually emit call audio, and confirm
   the bundle ID. If per-process tapping can't isolate call audio, stop and
   come back to the user before building anything else.
 - **Chimes and ringtones:** VAD alone isn't enough since they come from
@@ -155,6 +158,8 @@ the notes above were checked on 2026-10-16 but should not be trusted blindly.
   words (minimum duration and word count, builder tunes). Bar is "rare",
   not zero; one stray pill per call is acceptable, one per chime is not.
 - **Code-switching granularity:** sentence-level switching is required.
+  A misclassified English sentence that shows up translated is a bug; a
+  Portuguese sentence wrongly dropped as English is a worse one.
   English loanwords inside Portuguese sentences ("deploy", "pipeline",
   "sprint") are common in Brazilian tech talk and must come through
   readable. Full intra-sentence switching (half a sentence in each language)
