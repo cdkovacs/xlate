@@ -90,3 +90,18 @@ private func caption(_ text: String) -> Caption { Caption(english: text, portugu
     #expect(history.earlier.isEmpty)
     #expect(history.current.english.isEmpty)
 }
+
+@Test func captionSizeDefaultsToMedium() {
+    #expect(CaptionSize(saved: nil) == .medium)
+    #expect(CaptionSize(saved: "huge") == .medium)
+}
+
+@Test func captionSizeRestoresSavedChoice() {
+    #expect(CaptionSize(saved: CaptionSize.extraLarge.rawValue) == .extraLarge)
+}
+
+@Test func captionSizesGrowInMenuOrder() {
+    let scales = CaptionSize.allCases.map(\.scale)
+    #expect(scales == scales.sorted())
+    #expect(CaptionSize.medium.scale == 1)
+}

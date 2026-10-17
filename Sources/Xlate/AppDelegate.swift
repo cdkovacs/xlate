@@ -18,6 +18,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private let persistentItem = NSMenuItem(title: "Keep Captions Visible", action: #selector(togglePersistent),
                                             keyEquivalent: "")
     private let historyMenu = NSMenu()
+    private let sizeMenu = NSMenu()
     private let panel = PillPanel()
     private let translator = AppleTranslator()
     private var monitor: WakeMonitor?
@@ -66,6 +67,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let history = NSMenuItem(title: "Caption History", action: nil, keyEquivalent: "")
         history.submenu = historyMenu
         menu.addItem(history)
+        for size in CaptionSize.allCases {
+            let choice = NSMenuItem(title: size.title, action: #selector(chooseSize(_:)), keyEquivalent: "")
+            choice.target = self
+            choice.representedObject = size.rawValue
+            sizeMenu.addItem(choice)
+        }
+        let sizes = NSMenuItem(title: "Caption Size", action: nil, keyEquivalent: "")
+        sizes.submenu = sizeMenu
+        menu.addItem(sizes)
         loginItem.target = self
         menu.addItem(loginItem)
         setupItem.target = self
@@ -83,6 +93,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         loginItem.state = SMAppService.mainApp.status == .enabled ? .on : .off
         persistentItem.state = panel.persistent ? .on : .off
         for choice in historyMenu.items { choice.state = choice.tag == panel.historyLines ? .on : .off }
+        for choice in sizeMenu.items {
+            choice.state = choice.representedObject as? String == panel.captionSize.rawValue ? .on : .off
+        }
     }
 
     private func setStatus(_ text: String) {
@@ -211,6 +224,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     @objc private func chooseHistory(_ sender: NSMenuItem) {
         panel.historyLines = sender.tag
         refreshMenu()
+    }
+
+    /// Shows a sample caption so the new size is visible right away.
+    @objc private func chooseSize(_ sender: NSMenuItem) {
+        panel.captionSize = CaptionSize(saved: sender.representedObject as? String)
+        refreshMenu()
+        panel.show(Caption(english: "Captions will appear here.", portuguese: "As legendas vão aparecer aqui."))
     }
 
     @objc private func resetPill() {

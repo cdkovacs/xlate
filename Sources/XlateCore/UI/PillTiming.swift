@@ -43,6 +43,35 @@ public struct CaptionHistory: Equatable, Sendable {
     }
 }
 
+/// How big the pill's text is. Medium is the original look; the others
+/// scale fonts, spacing, and width together so line breaks stay similar.
+public enum CaptionSize: String, CaseIterable, Sendable {
+    case small, medium, large, extraLarge
+
+    /// Falls back to medium for a missing or unknown saved value.
+    public init(saved: String?) {
+        self = saved.flatMap(Self.init(rawValue:)) ?? .medium
+    }
+
+    public var title: String {
+        switch self {
+        case .small: "Small"
+        case .medium: "Medium"
+        case .large: "Large"
+        case .extraLarge: "Extra Large"
+        }
+    }
+
+    public var scale: CGFloat {
+        switch self {
+        case .small: 0.85
+        case .medium: 1
+        case .large: 1.2
+        case .extraLarge: 1.45
+        }
+    }
+}
+
 /// Where the pill goes. Coordinates are AppKit screen coordinates (origin at
 /// the bottom left of the main screen).
 public enum PillPlacement {

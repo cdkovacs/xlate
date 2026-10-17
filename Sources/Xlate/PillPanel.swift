@@ -6,6 +6,7 @@ import XlateCore
 @MainActor @Observable
 final class PillModel {
     var history = CaptionHistory(limit: 0)
+    var size = CaptionSize.medium
 }
 
 /// The caption pill: English on top, the Portuguese it came from underneath.
@@ -13,33 +14,36 @@ final class PillModel {
 struct PillView: View {
     let model: PillModel
 
+    /// Scales a medium-size measurement to the chosen caption size.
+    private func s(_ points: CGFloat) -> CGFloat { (points * model.size.scale).rounded() }
+
     var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
+        VStack(alignment: .leading, spacing: s(4)) {
             ForEach(Array(model.history.earlier.enumerated()), id: \.offset) { _, caption in
                 Text(caption.english)
-                    .font(.system(size: 13))
+                    .font(.system(size: s(13)))
                     .foregroundStyle(Color(white: 0.6))
-                    .padding(.leading, 14)
+                    .padding(.leading, s(14))
             }
-            HStack(alignment: .firstTextBaseline, spacing: 7) {
+            HStack(alignment: .firstTextBaseline, spacing: s(7)) {
                 Circle()
                     .fill(Color(red: 0.23, green: 0.82, blue: 0.42))
-                    .frame(width: 7, height: 7)
+                    .frame(width: s(7), height: s(7))
                     .alignmentGuide(.firstTextBaseline) { $0[.bottom] - 1 }
                 Text(model.history.current.english)
-                    .font(.system(size: 15))
+                    .font(.system(size: s(15)))
                     .foregroundStyle(.white)
             }
             Text(model.history.current.portuguese)
-                .font(.system(size: 12).italic())
+                .font(.system(size: s(12)).italic())
                 .foregroundStyle(Color(white: 0.73))
-                .padding(.leading, 14)
+                .padding(.leading, s(14))
         }
         .fixedSize(horizontal: false, vertical: true)
-        .padding(.horizontal, 14)
-        .padding(.vertical, 9)
-        .frame(width: PillPanel.width, alignment: .leading)
-        .background(RoundedRectangle(cornerRadius: 14).fill(Color(white: 0.08, opacity: 0.88)))
+        .padding(.horizontal, s(14))
+        .padding(.vertical, s(9))
+        .frame(width: PillPanel.width(for: model.size), alignment: .leading)
+        .background(RoundedRectangle(cornerRadius: s(14)).fill(Color(white: 0.08, opacity: 0.88)))
     }
 }
 
@@ -47,11 +51,13 @@ struct PillView: View {
 /// Space, can be dragged, and never takes focus or keystrokes from Teams.
 @MainActor
 final class PillPanel: NSPanel {
-    static let width: CGFloat = 400
     static let originKey = "pillOrigin"
     static let persistentKey = "pillPersistent"
     static let historyKey = "pillHistoryLines"
+    static let sizeKey = "pillCaptionSize"
     static let historyChoices = [0, 1, 2, 3, 5]
+
+    static func width(for size: CaptionSize) -> CGFloat { (400 * size.scale).rounded() }
 
     private let model = PillModel()
     private var fadeTimer: Timer?
@@ -75,8 +81,18 @@ final class PillPanel: NSPanel {
         }
     }
 
+    var captionSize: CaptionSize {
+        get { model.size }
+        set {
+            UserDefaults.standard.set(newValue.rawValue, forKey: Self.sizeKey)
+            model.size = newValue
+            if placed { resizeKeepingTop() }
+        }
+    }
+
     init() {
-        super.init(contentRect: NSRect(x: 0, y: 0, width: Self.width, height: 60),
+        let size = CaptionSize(saved: UserDefaults.standard.string(forKey: Self.sizeKey))
+        super.init(contentRect: NSRect(x: 0, y: 0, width: Self.width(for: size), height: 60),
                    styleMask: [.nonactivatingPanel, .borderless], backing: .buffered, defer: true)
         level = .statusBar
         collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .stationary]
@@ -89,6 +105,7 @@ final class PillPanel: NSPanel {
         alphaValue = 0
         UserDefaults.standard.register(defaults: [Self.persistentKey: false, Self.historyKey: 0])
         model.history.limit = UserDefaults.standard.integer(forKey: Self.historyKey)
+        model.size = size
         contentView = NSHostingView(rootView: PillView(model: model))
         NotificationCenter.default.addObserver(forName: NSWindow.didMoveNotification, object: self, queue: .main) {
             [weak self] _ in
@@ -143,7 +160,8 @@ final class PillPanel: NSPanel {
         guard let content = contentView else { return }
         let height = content.fittingSize.height
         let top = frame.maxY
-        setFrame(NSRect(x: frame.minX, y: placed ? top - height : frame.minY, width: Self.width, height: height),
+        setFrame(NSRect(x: frame.minX, y: placed ? top - height : frame.minY, width: Self.width(for: model.size),
+                        height: height),
                  display: true)
     }
 
