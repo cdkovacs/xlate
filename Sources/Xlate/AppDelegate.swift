@@ -14,6 +14,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private let statusLine = NSMenuItem(title: "Starting…", action: nil, keyEquivalent: "")
     private let enabledItem = NSMenuItem(title: "Enabled", action: #selector(toggleEnabled), keyEquivalent: "")
     private let loginItem = NSMenuItem(title: "Open at Login", action: #selector(toggleLogin), keyEquivalent: "")
+    private let setupItem = NSMenuItem(title: "Set Up Models…", action: #selector(setUpModels), keyEquivalent: "")
     private let panel = PillPanel()
     private let translator = AppleTranslator()
     private var monitor: WakeMonitor?
@@ -52,9 +53,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         menu.addItem(reset)
         loginItem.target = self
         menu.addItem(loginItem)
-        let setup = NSMenuItem(title: "Set Up Models…", action: #selector(setUpModels), keyEquivalent: "")
-        setup.target = self
-        menu.addItem(setup)
+        setupItem.target = self
+        menu.addItem(setupItem)
         menu.addItem(.separator())
         menu.addItem(NSMenuItem(title: "Quit Xlate", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q"))
         item.menu = menu
@@ -191,22 +191,73 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         panel.show(Caption(english: "Captions will appear here.", portuguese: "As legendas vão aparecer aqui."))
     }
 
-    /// The only action that downloads anything.
+    /// The only action that downloads anything. The menu closes on click, so
+    /// every outcome is reported in a dialog, and progress shows in this item.
     @objc private func setUpModels() {
         Task {
-            setStatus("Downloading speech model…")
-            do {
-                try await WhisperTranscriber.installModel()
-            } catch {
-                return setStatus("Speech model download failed")
+            let step = ModelSetup.nextStep(speechInstalled: WhisperTranscriber.isInstalled,
+                                           translationInstalled: await AppleTranslator.isInstalled())
+            switch step {
+            case .allReady:
+                // Restarting would interrupt captions mid-call, so only
+                // start if a missing model stopped us earlier.
+                if !ready { await start() }
+                alert("Models are ready",
+                      "The speech and translation models are installed on this Mac. Captions appear when Teams plays Portuguese.")
+            case .downloadSpeech:
+                await downloadSpeechModel()
+            case .installTranslation:
+                promptForTranslation()
             }
-            if case .modelMissing = try? await translator.prepare() {
-                // Apple's translation languages install from System Settings.
-                NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.Localization-Settings.extension")!)
-                return setStatus("Install Portuguese in Translation Languages")
-            }
-            await start()
         }
+    }
+
+    private func downloadSpeechModel() async {
+        setupItem.isEnabled = false
+        setupItem.title = "Downloading Speech Model… 0%"
+        defer {
+            setupItem.title = "Set Up Models…"
+            setupItem.isEnabled = true
+        }
+        do {
+            try await WhisperTranscriber.installModel { fraction in
+                Task { @MainActor [weak self] in
+                    self?.setupItem.title = String(format: "Downloading Speech Model… %.0f%%", fraction * 100)
+                }
+            }
+        } catch {
+            setStatus("Speech model download failed")
+            alert("Speech model download failed", error.localizedDescription)
+            return
+        }
+        if await AppleTranslator.isInstalled() {
+            await start()
+            alert("Models are ready", "The speech model is installed. Captions appear when Teams plays Portuguese.")
+        } else {
+            promptForTranslation()
+        }
+    }
+
+    /// Apple's translation languages install from System Settings.
+    private func promptForTranslation() {
+        setStatus("Translation model missing")
+        let open = alert("Install Portuguese for translation",
+                         "In System Settings, open General → Language & Region → Translation Languages and download Portuguese (Brazil). Then choose Set Up Models… again.",
+                         buttons: ["Open System Settings", "Later"])
+        if open {
+            NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.Localization-Settings.extension")!)
+        }
+    }
+
+    /// Shows a dialog in front of other apps. Returns true for the first button.
+    @discardableResult
+    private func alert(_ title: String, _ message: String, buttons: [String] = ["OK"]) -> Bool {
+        let alert = NSAlert()
+        alert.messageText = title
+        alert.informativeText = message
+        for button in buttons { alert.addButton(withTitle: button) }
+        NSApp.activate()
+        return alert.runModal() == .alertFirstButtonReturn
     }
 }
 

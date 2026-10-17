@@ -31,6 +31,8 @@ public actor WhisperTranscriber: Transcriber {
                                                   verbose: false, logLevel: .error, download: true))
     }
 
+    public static var isInstalled: Bool { installedFolder() != nil }
+
     static func installedFolder() -> URL? {
         let enumerator = FileManager.default.enumerator(at: modelsBase, includingPropertiesForKeys: [.isDirectoryKey])
         while let url = enumerator?.nextObject() as? URL {

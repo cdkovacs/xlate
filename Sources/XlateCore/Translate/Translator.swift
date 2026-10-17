@@ -17,10 +17,14 @@ public actor AppleTranslator: Translator {
 
     public init() {}
 
+    /// Checks without loading anything.
+    public static func isInstalled() async -> Bool {
+        await LanguageAvailability().status(from: source, to: target) == .installed
+    }
+
     public func prepare() async throws -> EngineStatus {
         if session != nil { return .ready }
-        let status = await LanguageAvailability().status(from: Self.source, to: Self.target)
-        guard status == .installed else { return .modelMissing("Portuguese → English translation") }
+        guard await Self.isInstalled() else { return .modelMissing("Portuguese → English translation") }
         let session = TranslationSession(installedSource: Self.source, target: Self.target)
         self.session = session
         // The model loads lazily; on a live call the first few captions took
