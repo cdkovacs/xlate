@@ -1,5 +1,7 @@
 import AVFoundation
+import AppKit
 import Foundation
+import SwiftUI
 import Translation
 import XlateCore
 
@@ -23,6 +25,10 @@ enum DevCommands {
                     return 1
                 }
             }
+        case "pill-snapshot":
+            return MainActor.assumeIsolated { pillSnapshot(args.dropFirst().first ?? "pill.png") }
+        case "pill-demo":
+            MainActor.assumeIsolated { pillDemo() }
         case "live":
             blocking { await live(Array(args.dropFirst())) }
         case "engines":
@@ -245,5 +251,46 @@ enum DevCommands {
             print("error: \(error)")
             return 1
         }
+    }
+
+    static let sample = Caption(english: "I think we can close that by Thursday if the tests pass.",
+                                portuguese: "Acho que dá pra fechar isso até quinta se os testes passarem.")
+
+    /// Renders the pill to a PNG without putting anything on screen.
+    @MainActor
+    static func pillSnapshot(_ path: String) -> Int32 {
+        let model = PillModel()
+        model.caption = sample
+        let renderer = ImageRenderer(content: PillView(model: model).padding(20).background(Color(white: 0.35)))
+        renderer.scale = 2
+        guard let image = renderer.cgImage,
+              let png = NSBitmapImageRep(cgImage: image).representation(using: .png, properties: [:])
+        else { return 1 }
+        do {
+            try png.write(to: URL(fileURLWithPath: path))
+            print("wrote \(path)")
+            return 0
+        } catch {
+            print("error: \(error)")
+            return 1
+        }
+    }
+
+    /// Shows the real panel with sample captions for 20 s.
+    @MainActor
+    static func pillDemo() -> Never {
+        let app = NSApplication.shared
+        app.setActivationPolicy(.accessory)
+        let panel = PillPanel()
+        panel.show(sample)
+        DispatchQueue.main.asyncAfter(deadline: .now() + 5) {
+            MainActor.assumeIsolated {
+                panel.show(Caption(english: "Did everyone see the email from yesterday?",
+                                   portuguese: "Todo mundo viu o e-mail de ontem?"))
+            }
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 20) { exit(0) }
+        app.run()
+        exit(0)
     }
 }
