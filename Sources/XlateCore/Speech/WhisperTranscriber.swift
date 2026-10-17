@@ -1,9 +1,9 @@
 import Foundation
 import WhisperKit
 
-/// Whisper (large-v3-turbo, quantized for M1) via argmax-oss-swift. Language is
-/// detected per utterance, restricted to Portuguese vs English, then the
-/// utterance is transcribed with that language pinned.
+/// Whisper (large-v3-turbo, quantized for M1) via argmax-oss-swift. One pass
+/// detects the language and transcribes; a third-language guess (es, gl) is
+/// redone pinned to Portuguese.
 ///
 /// Never downloads during a call: `prepare()` only loads what `installModel()`
 /// already put on disk.
@@ -17,6 +17,7 @@ public actor WhisperTranscriber: Transcriber {
     }
 
     private var pipe: WhisperKit?
+    private let serializer = Serializer()
 
     public init() {}
 
@@ -49,16 +50,27 @@ public actor WhisperTranscriber: Transcriber {
 
     public func transcribe(_ utterance: Utterance) async throws -> Transcript {
         guard let pipe else { throw WhisperError.notPrepared }
+        // WhisperKit isn't Sendable; the serializer keeps it to one utterance
+        // at a time, even across a tap rebuild.
+        nonisolated(unsafe) let whisper = pipe
+        let samples = utterance.samples
+        let (results, language) = try await serializer.run { () async throws -> ([String], SpokenLanguage) in
+            try await Self.recognize(samples, with: whisper)
+        }
+        let text = results.joined(separator: " ").trimmingCharacters(in: .whitespacesAndNewlines)
+        return Transcript(text: text, language: text.isEmpty ? .unknown : language, duration: utterance.duration)
+    }
+
+    private static func recognize(_ samples: [Float], with pipe: WhisperKit) async throws -> ([String], SpokenLanguage) {
         // One pass with detection built in. Only a third-language guess (es, gl)
         // costs a second pass, pinned to Portuguese.
-        var results = try await pipe.transcribe(audioArray: utterance.samples, decodeOptions: Self.options(language: nil))
+        var results = try await pipe.transcribe(audioArray: samples, decodeOptions: options(language: nil))
         var language = Self.language(fromDetected: results.first?.language ?? "pt")
         if let code = results.first?.language, code != "pt", code != "en" {
-            results = try await pipe.transcribe(audioArray: utterance.samples, decodeOptions: Self.options(language: "pt"))
+            results = try await pipe.transcribe(audioArray: samples, decodeOptions: options(language: "pt"))
             language = .portuguese
         }
-        let text = results.map(\.text).joined(separator: " ").trimmingCharacters(in: .whitespacesAndNewlines)
-        return Transcript(text: text, language: text.isEmpty ? .unknown : language, duration: utterance.duration)
+        return (results.map(\.text), language)
     }
 
     static func options(language: String?) -> DecodingOptions {

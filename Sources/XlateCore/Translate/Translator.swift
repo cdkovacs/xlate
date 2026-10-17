@@ -13,6 +13,7 @@ public actor AppleTranslator: Translator {
     static let target = Locale.Language(identifier: "en")
 
     private var session: TranslationSession?
+    private let serializer = Serializer()
 
     public init() {}
 
@@ -30,10 +31,10 @@ public actor AppleTranslator: Translator {
 
     public func translate(_ portuguese: String) async throws -> String {
         guard let session else { throw TranslatorError.notPrepared }
-        // TranslationSession isn't Sendable. CaptionPipeline translates one
-        // caption at a time, so the session is never used concurrently.
+        // TranslationSession isn't Sendable. The serializer guarantees one
+        // translation at a time, even across a tap rebuild.
         nonisolated(unsafe) let unchecked = session
-        return try await unchecked.translate(portuguese).targetText
+        return try await serializer.run { try await unchecked.translate(portuguese).targetText }
     }
 
     enum TranslatorError: Error {

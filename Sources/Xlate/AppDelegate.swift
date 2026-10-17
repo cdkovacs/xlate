@@ -91,6 +91,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func startWatching() {
+        stopWatching()
         guard ready, UserDefaults.standard.bool(forKey: Self.enabledKey) else {
             return setStatus(ready ? "Disabled" : statusLine.title)
         }
@@ -137,11 +138,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                     self?.panel.show(caption)
                     if self?.devMode == true { print("caption: \(caption.english) | \(caption.portuguese)") }
                 }
+                // The tap ended without stopTap() (a device change it couldn't
+                // recover from). Forget it so the next wake poll retaps.
+                if !Task.isCancelled { self?.tapLost() }
             }
             setStatus("Listening")
         } catch {
             setStatus("Can't capture Teams audio")
         }
+    }
+
+    private func tapLost() {
+        tap = nil
+        tapped = []
+        setStatus("Reconnecting…")
     }
 
     private func stopTap() {

@@ -88,3 +88,10 @@ private func awake(_ procs: [AudioProcess]) -> WakeMachine {
 func retapOnlyForUntappedProcesses(_ tapped: Set<AudioObjectID>, _ wanted: Set<AudioObjectID>, _ expected: Bool) {
     #expect(WakeMachine.needsRetap(tapped: tapped, wanted: wanted) == expected)
 }
+
+@Test func monitorRepeatsActiveSoFailedTapsRetry() {
+    #expect(WakeMonitor.shouldEmit(previous: nil, current: .idle))
+    #expect(!WakeMonitor.shouldEmit(previous: .idle, current: .idle))
+    #expect(WakeMonitor.shouldEmit(previous: .idle, current: .active([1])))
+    #expect(WakeMonitor.shouldEmit(previous: .active([1]), current: .active([1])))
+}

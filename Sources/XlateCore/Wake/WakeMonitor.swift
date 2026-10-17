@@ -68,7 +68,9 @@ public struct WakeMachine: Sendable {
     }
 }
 
-/// Polls Core Audio once a second and reports wake state changes.
+/// Polls Core Audio once a second and reports wake state changes. `.active`
+/// repeats every poll so a tap that failed or was lost gets retried; the app
+/// dedupes with `WakeMachine.needsRetap`.
 public final class WakeMonitor: Sendable {
     public let states: AsyncStream<WakeState>
     private let task: Task<Void, Never>
@@ -85,7 +87,7 @@ public final class WakeMonitor: Sendable {
                 let elapsed = ContinuousClock.now - start
                 let now = Double(elapsed.components.seconds) + Double(elapsed.components.attoseconds) / 1e18
                 let state = machine.observe(processes, at: now)
-                if state != last {
+                if Self.shouldEmit(previous: last, current: state) {
                     continuation.yield(state)
                     last = state
                 }
@@ -97,5 +99,10 @@ public final class WakeMonitor: Sendable {
 
     deinit {
         task.cancel()
+    }
+
+    public static func shouldEmit(previous: WakeState?, current: WakeState) -> Bool {
+        if case .active = current { return true }
+        return current != previous
     }
 }
