@@ -44,4 +44,32 @@ public final class Downmix: @unchecked Sendable {
         guard error == nil, let data = out.floatChannelData else { return [] }
         return Array(UnsafeBufferPointer(start: data[0], count: Int(out.frameLength)))
     }
+
+    /// Converts a whole file-sized buffer in one go, including the tail the
+    /// streaming path would carry over to the next call.
+    public func toMono16kFlushing(_ buffer: AVAudioPCMBuffer) -> [Float] {
+        let ratio = output.sampleRate / buffer.format.sampleRate
+        let capacity = AVAudioFrameCount((Double(buffer.frameLength) * ratio).rounded(.up)) + 8192
+        guard let out = AVAudioPCMBuffer(pcmFormat: output, frameCapacity: capacity) else { return [] }
+        var samples: [Float] = []
+        var fed = false
+        while true {
+            out.frameLength = 0
+            var error: NSError?
+            let status = converter.convert(to: out, error: &error) { _, inputStatus in
+                if fed {
+                    inputStatus.pointee = .endOfStream
+                    return nil
+                }
+                fed = true
+                inputStatus.pointee = .haveData
+                return buffer
+            }
+            if let data = out.floatChannelData, out.frameLength > 0 {
+                samples += UnsafeBufferPointer(start: data[0], count: Int(out.frameLength))
+            }
+            if status != .haveData || error != nil { break }
+        }
+        return samples
+    }
 }
