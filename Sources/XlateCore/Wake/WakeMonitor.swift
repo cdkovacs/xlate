@@ -11,9 +11,10 @@ public enum WakeState: Sendable, Equatable {
 }
 
 /// Decides when to listen. Wakes after a second of continuous output from the
-/// target app and sleeps after 30 s without any. While active, the tap covers
-/// every target audio process, so a chime from a helper doesn't force a
-/// rebuild; only processes appearing or disappearing change the set.
+/// target app and sleeps after 30 s without any. On waking, the tap covers
+/// every target audio process. After that a process joins only once it plays
+/// something, so a short-lived silent helper never forces a rebuild, and
+/// processes that exit just drop out.
 public struct WakeMachine: Sendable {
     public static let wakeAfter: TimeInterval = 1
     public static let sleepAfter: TimeInterval = 30
@@ -25,6 +26,12 @@ public struct WakeMachine: Sendable {
 
     public init(bundlePrefix: String) {
         self.bundlePrefix = bundlePrefix
+    }
+
+    /// Rebuild the tap only when something we aren't tapping starts playing.
+    /// Processes leaving the set don't need a rebuild.
+    public static func needsRetap(tapped: Set<AudioObjectID>, wanted: Set<AudioObjectID>) -> Bool {
+        !wanted.isSubset(of: tapped)
     }
 
     public mutating func observe(_ processes: [AudioProcess], at time: TimeInterval) -> WakeState {
@@ -44,12 +51,13 @@ public struct WakeMachine: Sendable {
             outputSince = nil
         }
 
-        if case .active = state {
+        if case .active(let previous) = state {
             if !outputting, let last = lastOutput, time - last >= Self.sleepAfter {
                 lastOutput = nil
                 state = .idle
             } else {
-                state = .active(ids)
+                let playing = Set(targets.filter(\.isRunningOutput).map(\.objectID))
+                state = .active(previous.intersection(ids).union(playing))
             }
         } else if let since = outputSince, time - since >= Self.wakeAfter {
             state = .active(ids)

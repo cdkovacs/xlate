@@ -29,6 +29,12 @@ enum DevCommands {
             return MainActor.assumeIsolated { pillSnapshot(args.dropFirst().first ?? "pill.png") }
         case "pill-demo":
             MainActor.assumeIsolated { pillDemo() }
+        case "play-target":
+            // Full app against another app's audio, muted, printing captions.
+            setvbuf(stdout, nil, _IOLBF, 0)
+            MainActor.assumeIsolated { runApp(target: args.dropFirst().first ?? "dev.ckovacs.xlate", devMode: true) }
+        case "play":
+            return play(args.dropFirst().first ?? "")
         case "live":
             blocking { await live(Array(args.dropFirst())) }
         case "engines":
@@ -292,5 +298,17 @@ enum DevCommands {
         DispatchQueue.main.asyncAfter(deadline: .now() + 20) { exit(0) }
         app.run()
         exit(0)
+    }
+
+    /// Plays a file from inside Xlate.app so `play-target dev.ckovacs.xlate`
+    /// can tap it.
+    static func play(_ path: String) -> Int32 {
+        guard let player = try? AVAudioPlayer(contentsOf: URL(fileURLWithPath: path)) else {
+            print("can't play \(path)")
+            return 1
+        }
+        player.play()
+        Thread.sleep(forTimeInterval: player.duration + 3)
+        return 0
     }
 }

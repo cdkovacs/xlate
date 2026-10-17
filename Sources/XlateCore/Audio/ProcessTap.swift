@@ -27,8 +27,9 @@ public final class ProcessTap: @unchecked Sendable {
     private var downmix: Downmix?
     private var existingFormat: AVAudioFormat?
 
-    public convenience init(processes: [AudioObjectID]) throws {
-        try self.init(backend: HALTapBackend(processes: processes), outputs: SystemOutputDevice())
+    /// `muted` silences the tapped processes on the speakers (dev playback only).
+    public convenience init(processes: [AudioObjectID], muted: Bool = false) throws {
+        try self.init(backend: HALTapBackend(processes: processes, muted: muted), outputs: SystemOutputDevice())
     }
 
     init(backend: TapBackend, outputs: OutputDeviceProvider) throws {
@@ -78,19 +79,21 @@ public final class ProcessTap: @unchecked Sendable {
 /// Real backend: CATapDescription → process tap → private aggregate device → IOProc.
 final class HALTapBackend: TapBackend {
     private let processes: [AudioObjectID]
+    private let muted: Bool
     private var tapID = AudioObjectID(kAudioObjectUnknown)
     private var aggregateID = AudioObjectID(kAudioObjectUnknown)
     private var procID: AudioDeviceIOProcID?
     private let queue = DispatchQueue(label: "xlate.tap", qos: .userInitiated)
 
-    init(processes: [AudioObjectID]) {
+    init(processes: [AudioObjectID], muted: Bool) {
         self.processes = processes
+        self.muted = muted
     }
 
     func start(outputUID: String, onBuffer: @escaping @Sendable (AVAudioPCMBuffer) -> Void) throws {
         let description = CATapDescription(stereoMixdownOfProcesses: processes)
         description.uuid = UUID()
-        description.muteBehavior = .unmuted
+        description.muteBehavior = muted ? .muted : .unmuted
         description.isPrivate = true
         try check(AudioHardwareCreateProcessTap(description, &tapID), "create process tap")
 
