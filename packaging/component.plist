@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!-- pkgbuild component settings. Non-relocatable so Installer never redirects the
+     install to another copy of dev.ckovacs.xlate it finds on disk; not
+     version-checked so an older release can be reinstalled over a newer one. -->
+<plist version="1.0">
+<array>
+	<dict>
+		<key>BundleHasStrictIdentifier</key>
+		<true/>
+		<key>BundleIsRelocatable</key>
+		<false/>
+		<key>BundleIsVersionChecked</key>
+		<false/>
+		<key>BundleOverwriteAction</key>
+		<string>upgrade</string>
+		<key>RootRelativeBundlePath</key>
+		<string>Xlate.app</string>
+	</dict>
+</array>
+</plist>

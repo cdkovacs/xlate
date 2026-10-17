@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- productbuild distribution for the Xlate installer. One arm64 component that
+     installs Xlate.app into /Applications. __VERSION__ is substituted by
+     build_pkg.sh. -->
+<installer-gui-script minSpecVersion="2">
+    <title>Xlate</title>
+    <organization>dev.ckovacs</organization>
+    <welcome file="welcome.html" mime-type="text/html"/>
+    <conclusion file="conclusion.html" mime-type="text/html"/>
+
+    <options customize="never" require-scripts="false" hostArchitectures="arm64"/>
+    <domains enable_anywhere="false" enable_currentUserHome="false" enable_localSystem="true"/>
+    <volume-check>
+        <allowed-os-versions><os-version min="26.0"/></allowed-os-versions>
+    </volume-check>
+
+    <choices-outline>
+        <line choice="default"/>
+    </choices-outline>
+    <choice id="default" title="Xlate" visible="false">
+        <pkg-ref id="dev.ckovacs.xlate.pkg"/>
+    </choice>
+
+    <pkg-ref id="dev.ckovacs.xlate.pkg" version="__VERSION__">Xlate-component.pkg</pkg-ref>
+</installer-gui-script>

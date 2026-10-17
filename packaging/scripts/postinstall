@@ -1,0 +1,12 @@
+#!/bin/zsh
+# Runs as ROOT after the payload is laid down. Launches Xlate in the logged-in
+# user's GUI session so the menu bar icon shows up without a trip to /Applications.
+CONSOLE_USER="$(stat -f%Su /dev/console 2>/dev/null || echo '')"
+case "$CONSOLE_USER" in
+    ""|root|loginwindow|_mbsetupuser)
+        echo "postinstall: no logged-in user; not launching Xlate."
+        exit 0 ;;
+esac
+launchctl asuser "$(id -u "$CONSOLE_USER")" sudo -u "$CONSOLE_USER" \
+    open -a "/Applications/Xlate.app" || true
+exit 0

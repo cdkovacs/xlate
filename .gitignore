@@ -4,3 +4,5 @@ build/
 fixtures/out/
 *.wav
 .DS_Store
+packaging/build/
+packaging/dist/

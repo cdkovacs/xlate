@@ -1,0 +1,6 @@
+#!/bin/zsh
+# Runs as ROOT before the payload is laid down. Quits a running Xlate so the
+# bundle swap doesn't happen under a live process. Downloaded Whisper models in
+# ~/Library/Application Support are left alone.
+pkill -x Xlate 2>/dev/null && sleep 1
+exit 0
