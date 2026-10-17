@@ -15,6 +15,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private let enabledItem = NSMenuItem(title: "Enabled", action: #selector(toggleEnabled), keyEquivalent: "")
     private let loginItem = NSMenuItem(title: "Open at Login", action: #selector(toggleLogin), keyEquivalent: "")
     private let setupItem = NSMenuItem(title: "Set Up Models…", action: #selector(setUpModels), keyEquivalent: "")
+    private let persistentItem = NSMenuItem(title: "Keep Captions Visible", action: #selector(togglePersistent),
+                                            keyEquivalent: "")
+    private let historyMenu = NSMenu()
     private let panel = PillPanel()
     private let translator = AppleTranslator()
     private var monitor: WakeMonitor?
@@ -51,6 +54,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let reset = NSMenuItem(title: "Reset Caption Position", action: #selector(resetPill), keyEquivalent: "")
         reset.target = self
         menu.addItem(reset)
+        persistentItem.target = self
+        menu.addItem(persistentItem)
+        for lines in PillPanel.historyChoices {
+            let title = lines == 0 ? "None" : lines == 1 ? "1 Line" : "\(lines) Lines"
+            let choice = NSMenuItem(title: title, action: #selector(chooseHistory(_:)), keyEquivalent: "")
+            choice.target = self
+            choice.tag = lines
+            historyMenu.addItem(choice)
+        }
+        let history = NSMenuItem(title: "Caption History", action: nil, keyEquivalent: "")
+        history.submenu = historyMenu
+        menu.addItem(history)
         loginItem.target = self
         menu.addItem(loginItem)
         setupItem.target = self
@@ -66,6 +81,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private func refreshMenu() {
         enabledItem.state = UserDefaults.standard.bool(forKey: Self.enabledKey) ? .on : .off
         loginItem.state = SMAppService.mainApp.status == .enabled ? .on : .off
+        persistentItem.state = panel.persistent ? .on : .off
+        for choice in historyMenu.items { choice.state = choice.tag == panel.historyLines ? .on : .off }
     }
 
     private func setStatus(_ text: String) {
@@ -160,7 +177,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         tap?.stop()
         tap = nil
         tapped = []
-        panel.hide()
+        panel.endSession()
     }
 
     @objc private func toggleEnabled() {
@@ -183,6 +200,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         } catch {
             setStatus("Couldn't change login item")
         }
+        refreshMenu()
+    }
+
+    @objc private func togglePersistent() {
+        panel.persistent.toggle()
+        refreshMenu()
+    }
+
+    @objc private func chooseHistory(_ sender: NSMenuItem) {
+        panel.historyLines = sender.tag
         refreshMenu()
     }
 

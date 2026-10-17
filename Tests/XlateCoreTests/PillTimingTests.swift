@@ -43,3 +43,50 @@ private let pill = CGSize(width: 400, height: 70)
     let origin = PillPlacement.defaultOrigin(size: pill, in: laptop)
     #expect(origin == CGPoint(x: 556, y: 815))
 }
+
+private func caption(_ text: String) -> Caption { Caption(english: text, portuguese: text) }
+
+@Test func historyStartsEmpty() {
+    let history = CaptionHistory(limit: 2)
+    #expect(history.earlier.isEmpty)
+    #expect(history.current.english.isEmpty)
+}
+
+@Test func historyKeepsOnlyLimitEarlierCaptionsOldestFirst() {
+    var history = CaptionHistory(limit: 2)
+    for text in ["a", "b", "c", "d"] { history.push(caption(text)) }
+    #expect(history.earlier.map(\.english) == ["b", "c"])
+    #expect(history.current.english == "d")
+}
+
+@Test func zeroLimitShowsOnlyCurrent() {
+    var history = CaptionHistory(limit: 0)
+    history.push(caption("a"))
+    history.push(caption("b"))
+    #expect(history.earlier.isEmpty)
+    #expect(history.current.english == "b")
+}
+
+@Test func loweringLimitTrimsOldest() {
+    var history = CaptionHistory(limit: 3)
+    for text in ["a", "b", "c", "d"] { history.push(caption(text)) }
+    history.limit = 1
+    #expect(history.earlier.map(\.english) == ["c"])
+}
+
+@Test func negativeLimitClampsToZero() {
+    var history = CaptionHistory(limit: -4)
+    history.push(caption("a"))
+    history.push(caption("b"))
+    #expect(history.limit == 0)
+    #expect(history.earlier.isEmpty)
+}
+
+@Test func clearForgetsEverything() {
+    var history = CaptionHistory(limit: 2)
+    history.push(caption("a"))
+    history.push(caption("b"))
+    history.clear()
+    #expect(history.earlier.isEmpty)
+    #expect(history.current.english.isEmpty)
+}

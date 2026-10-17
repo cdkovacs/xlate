@@ -11,6 +11,38 @@ public enum PillTiming {
     }
 }
 
+/// What the pill shows: the newest caption plus up to `limit` earlier ones.
+public struct CaptionHistory: Equatable, Sendable {
+    /// Earlier captions, oldest first.
+    public private(set) var earlier: [Caption] = []
+    public private(set) var current = Caption(english: "", portuguese: "")
+    public var limit: Int {
+        didSet {
+            limit = max(0, limit)
+            trim()
+        }
+    }
+
+    public init(limit: Int) {
+        self.limit = max(0, limit)
+    }
+
+    public mutating func push(_ caption: Caption) {
+        if !current.english.isEmpty { earlier.append(current) }
+        current = caption
+        trim()
+    }
+
+    public mutating func clear() {
+        earlier = []
+        current = Caption(english: "", portuguese: "")
+    }
+
+    private mutating func trim() {
+        if earlier.count > limit { earlier.removeFirst(earlier.count - limit) }
+    }
+}
+
 /// Where the pill goes. Coordinates are AppKit screen coordinates (origin at
 /// the bottom left of the main screen).
 public enum PillPlacement {

@@ -5,25 +5,32 @@ import XlateCore
 
 @MainActor @Observable
 final class PillModel {
-    var caption = Caption(english: "", portuguese: "")
+    var history = CaptionHistory(limit: 0)
 }
 
 /// The caption pill: English on top, the Portuguese it came from underneath.
+/// Earlier captions, when history is on, sit above in dimmed English.
 struct PillView: View {
     let model: PillModel
 
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
+            ForEach(Array(model.history.earlier.enumerated()), id: \.offset) { _, caption in
+                Text(caption.english)
+                    .font(.system(size: 13))
+                    .foregroundStyle(Color(white: 0.6))
+                    .padding(.leading, 14)
+            }
             HStack(alignment: .firstTextBaseline, spacing: 7) {
                 Circle()
                     .fill(Color(red: 0.23, green: 0.82, blue: 0.42))
                     .frame(width: 7, height: 7)
                     .alignmentGuide(.firstTextBaseline) { $0[.bottom] - 1 }
-                Text(model.caption.english)
+                Text(model.history.current.english)
                     .font(.system(size: 15))
                     .foregroundStyle(.white)
             }
-            Text(model.caption.portuguese)
+            Text(model.history.current.portuguese)
                 .font(.system(size: 12).italic())
                 .foregroundStyle(Color(white: 0.73))
                 .padding(.leading, 14)
@@ -42,10 +49,31 @@ struct PillView: View {
 final class PillPanel: NSPanel {
     static let width: CGFloat = 400
     static let originKey = "pillOrigin"
+    static let persistentKey = "pillPersistent"
+    static let historyKey = "pillHistoryLines"
+    static let historyChoices = [0, 1, 2, 3, 5]
 
     private let model = PillModel()
     private var fadeTimer: Timer?
     private var placed = false
+
+    /// Skip the fade; the pill stays up until the call ends.
+    var persistent: Bool {
+        get { UserDefaults.standard.bool(forKey: Self.persistentKey) }
+        set {
+            UserDefaults.standard.set(newValue, forKey: Self.persistentKey)
+            if alphaValue > 0 { scheduleFade() }
+        }
+    }
+
+    var historyLines: Int {
+        get { model.history.limit }
+        set {
+            UserDefaults.standard.set(newValue, forKey: Self.historyKey)
+            model.history.limit = newValue
+            if placed { resizeKeepingTop() }
+        }
+    }
 
     init() {
         super.init(contentRect: NSRect(x: 0, y: 0, width: Self.width, height: 60),
@@ -59,6 +87,8 @@ final class PillPanel: NSPanel {
         backgroundColor = .clear
         hasShadow = true
         alphaValue = 0
+        UserDefaults.standard.register(defaults: [Self.persistentKey: false, Self.historyKey: 0])
+        model.history.limit = UserDefaults.standard.integer(forKey: Self.historyKey)
         contentView = NSHostingView(rootView: PillView(model: model))
         NotificationCenter.default.addObserver(forName: NSWindow.didMoveNotification, object: self, queue: .main) {
             [weak self] _ in
@@ -70,7 +100,7 @@ final class PillPanel: NSPanel {
     override var canBecomeMain: Bool { false }
 
     func show(_ caption: Caption) {
-        model.caption = caption
+        model.history.push(caption)
         resizeKeepingTop()
         if !placed {
             setFrameOrigin(restoredOrigin())
@@ -78,7 +108,18 @@ final class PillPanel: NSPanel {
         }
         orderFrontRegardless()
         NSAnimationContext.runAnimationGroup { $0.duration = 0.15; animator().alphaValue = 1 }
+        scheduleFade()
+    }
+
+    /// Hides the pill and forgets its history, for when the call ends.
+    func endSession() {
+        hide()
+        model.history.clear()
+    }
+
+    private func scheduleFade() {
         fadeTimer?.invalidate()
+        guard !persistent else { return }
         fadeTimer = Timer.scheduledTimer(withTimeInterval: PillTiming.fadeAfter, repeats: false) { [weak self] _ in
             MainActor.assumeIsolated { self?.hide() }
         }

@@ -266,7 +266,10 @@ enum DevCommands {
     @MainActor
     static func pillSnapshot(_ path: String) -> Int32 {
         let model = PillModel()
-        model.caption = sample
+        model.history.limit = 2
+        model.history.push(Caption(english: "Did everyone get the agenda?", portuguese: "Todo mundo recebeu a pauta?"))
+        model.history.push(Caption(english: "Let's start with the release.", portuguese: "Vamos começar pelo release."))
+        model.history.push(sample)
         let renderer = ImageRenderer(content: PillView(model: model).padding(20).background(Color(white: 0.35)))
         renderer.scale = 2
         guard let image = renderer.cgImage,
