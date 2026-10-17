@@ -37,7 +37,8 @@ jobs:
 
   release:
     needs: version
-    if: needs.version.outputs.changed == 'true' || github.event_name == 'workflow_dispatch'
+    # Sign only code from main, even when a run is started on another branch.
+    if: github.ref == 'refs/heads/main' && (needs.version.outputs.changed == 'true' || github.event_name == 'workflow_dispatch')
     runs-on: macos-26        # Apple Silicon, Xcode 26 (the app needs the macOS 26 SDK)
     env:
       VERSION: ${{ needs.version.outputs.version }}
