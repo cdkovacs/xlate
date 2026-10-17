@@ -23,6 +23,8 @@ enum DevCommands {
                     return 1
                 }
             }
+        case "live":
+            blocking { await live(Array(args.dropFirst())) }
         case "engines":
             blocking { await engines(Array(args.dropFirst())) }
         case "tap":
@@ -152,6 +154,8 @@ enum DevCommands {
             }
             let transcriber = WhisperTranscriber.shared
             print("prepare: \(try await transcriber.prepare())")
+            let translator = AppleTranslator()
+            print("translator: \(try await translator.prepare())")
             var times: [Double] = []
             for (i, utterance) in utterances.enumerated() {
                 let clock = ContinuousClock.now
@@ -161,6 +165,12 @@ enum DevCommands {
                 times.append(seconds)
                 print(String(format: "#%02d %5.2fs audio  %4.2fs asr  %@  %@", i, utterance.duration, seconds,
                              "\(t.language)", t.text))
+                if t.language == .portuguese {
+                    let start = ContinuousClock.now
+                    let english = try await translator.translate(t.text)
+                    let took = ContinuousClock.now - start
+                    print(String(format: "      → %4.2fs mt   %@", Double(took.components.attoseconds) / 1e18 + Double(took.components.seconds), english))
+                }
             }
             let sorted = times.sorted()
             if !sorted.isEmpty {
@@ -183,5 +193,57 @@ enum DevCommands {
         buffer.frameLength = buffer.frameCapacity
         samples.withUnsafeBufferPointer { buffer.floatChannelData![0].update(from: $0.baseAddress!, count: $0.count) }
         try file.write(from: buffer)
+    }
+
+    /// Full pipeline against the live target app. Prints only metrics unless
+    /// --show-text is given, so a run can be shared without call content.
+    static func live(_ args: [String]) async -> Int32 {
+        let seconds = Int(option("--seconds", in: args) ?? "90") ?? 90
+        let showText = args.contains("--show-text")
+        do {
+            let targets = AudioProcesses.matching(TargetApp.teamsBundleID, in: try AudioProcesses.all())
+            guard !targets.isEmpty else {
+                print("Teams is not registered with Core Audio")
+                return 1
+            }
+            let transcriber = WhisperTranscriber.shared
+            let translator = AppleTranslator()
+            print("whisper: \(try await transcriber.prepare())  translator: \(try await translator.prepare())")
+            let tap = try ProcessTap(processes: targets.map(\.objectID))
+            let deadline = ContinuousClock.now + .seconds(seconds)
+            var gate = SpeechGate()
+            var n = 0
+            func elapsed(since start: ContinuousClock.Instant) -> Double {
+                let d = ContinuousClock.now - start
+                return Double(d.components.seconds) + Double(d.components.attoseconds) / 1e18
+            }
+            for await chunk in tap.chunks {
+                if ContinuousClock.now > deadline { break }
+                for utterance in gate.push(chunk) {
+                    n += 1
+                    let start = ContinuousClock.now
+                    let t = try await transcriber.transcribe(utterance)
+                    let asr = elapsed(since: start)
+                    var line = String(format: "#%02d %5.2fs audio  asr %4.2fs  %@ %d words", n, utterance.duration, asr,
+                                      "\(t.language)", t.text.split(separator: " ").count)
+                    var english = ""
+                    if t.language == .portuguese && !t.text.isEmpty {
+                        english = try await translator.translate(t.text)
+                        line += String(format: "  total %4.2fs", elapsed(since: start))
+                    }
+                    print(line)
+                    if showText {
+                        print("     pt: \(t.text)")
+                        if !english.isEmpty { print("     en: \(english)") }
+                    }
+                    fflush(stdout)
+                }
+            }
+            tap.stop()
+            return 0
+        } catch {
+            print("error: \(error)")
+            return 1
+        }
     }
 }
